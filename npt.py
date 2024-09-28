@@ -16,6 +16,11 @@ subparsers = parser.add_subparsers(help='The command to execute.', dest='command
 parser_show_connections = subparsers.add_parser('show_connections', help='Show all portal connections')
 parser_show_connections.add_argument('-p', '--portal', help="Show only information for a specific portal")
 
+parser_check_portal = subparsers.add_parser("check_new_portal", help="Checks if a portal can be constructed")
+parser_check_portal.add_argument('overworld_coords', help='Overworld coordinates in x/y/z')
+parser_check_portal.add_argument('nether_coords', help='Nether coordinates in x/y/z or - to use the converted coordinate on the nether roof')
+parser_check_portal.add_argument('-t', '--threshold', help='Number of blocks to check around the input', type=int, default=0)
+
 parser.add_argument('-d', '--data', default='./data/mcandy_portals.json', help="The JSON data to load.")
 args = parser.parse_args()
 
@@ -107,6 +112,22 @@ def get_portal_by_name(name, error=False):
         raise Exception(f"{name} is not a known portal.")
     return None
 
+def get_connections():
+    overworld_portals = list(filter(lambda p: p.is_nether == False, portals))
+    nether_portals = list(filter(lambda p: p.is_nether == True, portals))
+
+    connections = {}
+
+    for portal in overworld_portals:
+        connection = find_nether_connection(portal)
+        connections[portal.label] = connection.label if connection else f"New portal near {get_converted_coordinates(portal)}"
+    
+    for portal in nether_portals:
+        connection = find_nether_connection(portal)
+        connections[portal.label] = connection.label if connection else f"New portal near {get_converted_coordinates(portal)}"
+    
+    return connections
+
 def print_connections(target=None):
     overworld_portals = list(filter(lambda p: p.is_nether == False, portals))
     nether_portals = list(filter(lambda p: p.is_nether == True, portals))
@@ -120,7 +141,7 @@ def print_connections(target=None):
     
     for portal in nether_portals:
         connection = find_nether_connection(portal)
-        existing_conn = connections[connection.label]
+        existing_conn = connections[connection.label] if connection.label in connections else None
         if existing_conn == portal.label:
             del connections[connection.label]
             bidirectional.append([connection.label, portal.label])
@@ -162,6 +183,65 @@ def print_connections(target=None):
         print(portal.label + " -> " + connections[portal.label])
     print("\n")
 
+def parse_coords(coords_string):
+    [x,y,z] = coords_string.split("/")
+    return Position(x=int(x), y=int(y), z=int(z))
+
+def check_new_portal(overworld_pos, nether_pos, silent=False):
+    def print_if(str=''):
+        if not silent:
+            print(str)
+
+    print_if("Checking portals...")
+    print_if(f"Overworld: {overworld_pos}")
+    print_if(f"Nether: {nether_pos}")
+    print_if()
+
+    converted = convert_to_nether(overworld_pos)
+    if nether_pos.x > converted.x + 16 or nether_pos.x < converted.x - 16 or nether_pos.z > converted.z + 16 or nether_pos.z < converted.z - 16:
+        print_if("VIOLATION: Invalid nether position. Must be within 16 XZ blocks after converting the overworld position.")
+        return False
+    
+    for portal in portals:
+        if portal.is_nether == False and portal.position.x == overworld_pos.x and portal.position.y == overworld_pos.y and portal.position.z == overworld_pos.z:
+            print_if(f"VIOLATION: Collision with portal {portal.label}")
+            return False
+        elif portal.is_nether == True and portal.position.x == nether_pos.x and portal.position.y == nether_pos.y and portal.position.z == nether_pos.z:
+            print_if(f"VIOLATION: Collision with portal {portal.label}")
+            return False
+
+    connections = get_connections()
+    overworld_portal = Portal(label="NEW PORTAL (overworld)", position=overworld_pos, is_nether=False)
+    nether_portal = Portal(label="NEW PORTAL (nether)", position=nether_pos, is_nether=True)
+    portals.append(overworld_portal)
+    portals.append(nether_portal)
+    new_connections = get_connections()
+    portals.pop()
+    portals.pop()
+
+    del new_connections["NEW PORTAL (overworld)"]
+    del new_connections["NEW PORTAL (nether)"]
+
+    violations = []
+    for key in connections.keys():
+        if connections[key] != new_connections[key]:
+            old = f"{key} -> {connections[key]}"
+            new = f"{key} -> {new_connections[key]}"
+            violations.append([old, new])
+    
+    if len(violations) > 0:
+        counter = 0
+        for violation in violations:
+            counter+=1
+            print_if(f"VIOLATION #{counter}")
+            print_if(f"Old: {violation[0]}")
+            print_if(f"New: {violation[1]}")
+            print_if()
+        return False
+    
+    print_if("OK")
+    return True
+
 if args.command == "show_connections":
     if args.portal:
         portal = get_portal_by_name(args.portal, True)
@@ -169,3 +249,26 @@ if args.command == "show_connections":
         print_connections(portal)
     else:
         print_connections()
+elif args.command == "check_new_portal":
+    overworld_pos = parse_coords(args.overworld_coords)
+    nether_pos = convert_to_nether(overworld_pos) if args.nether_coords == "-" else parse_coords(args.nether_coords)
+    if args.nether_coords == "-":
+        nether_pos = Position(x=nether_pos.x, y=128, z=nether_pos.z)
+
+    valid_overworld_positions = []
+    if check_new_portal(overworld_pos, nether_pos, args.threshold):
+        valid_overworld_positions.append(overworld_pos)
+    
+    if args.threshold:
+        for x in range(-args.threshold, args.threshold+1):
+            for y in (-args.threshold, args.threshold+1):
+                for z in (-args.threshold, args.threshold+1):
+                    new_pos = Position(x=overworld_pos.x + x, y=overworld_pos.y + y, z=overworld_pos.z + z)
+                    if check_new_portal(new_pos, nether_pos, silent=True):
+                        valid_overworld_positions.append(new_pos)
+
+        if len(valid_overworld_positions) > 0:
+            for valid_position in valid_overworld_positions:
+                print(f"VALID: Overworld {valid_position.x}/{valid_position.y}/{valid_position.z} <-> Nether {nether_pos.x}/{nether_pos.y}/{nether_pos.z}")
+        else:
+            print("No valid positions found")
