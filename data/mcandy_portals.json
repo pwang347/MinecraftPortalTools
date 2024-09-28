@@ -1,0 +1,50 @@
+{
+    "overworld_portals": [
+        {
+            "label": "Marketplace",
+            "position": { "x": 379, "y": 64, "z": 601 }
+        },
+        {
+            "label": "Spider farm",
+            "position": { "x": 310, "y": -33, "z": 574 }
+        },
+        {
+            "label": "Michael sky base",
+            "position": { "x": 346, "y": 313, "z": 641 }
+        },
+        {
+            "label": "Michael church base",
+            "position": { "x": 571, "y": 64, "z": 778 }
+        },
+        {
+            "label": "Spider farm exit from nether",
+            "position": { "x": 190, "y": 64, "z": 598 }
+        },
+        {
+            "label": "Paul cave",
+            "position": { "x": 351, "y": -11, "z": 751 }
+        }
+    ],
+    "nether_portals": [
+        {
+            "label": "Marketplace (nether)",
+            "position": { "x": 43, "y": 128, "z": 89 }
+        },
+        {
+            "label": "Michael church base (nether)",
+            "position": { "x": 71, "y": 128, "z": 97 }
+        },
+        {
+            "label": "Michael's nether near church base (nether)",
+            "position": { "x": 69, "y": 4, "z": 100 }
+        },
+        {
+            "label": "Spider farm (nether)",
+            "position": { "x": 23, "y": 46, "z": 74 }
+        },
+        {
+            "label": "Paul cave (nether)",
+            "position": { "x": 43, "y": 128, "z": 94 }
+        }
+    ]
+}
